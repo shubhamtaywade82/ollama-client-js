@@ -99,7 +99,7 @@ available as `await stream.finalResult`.
 - `extractUsage(source: UsageSource): OllamaUsage` - top-level exported function (not a method on
   `client`). Reshapes the token counts and nanosecond durations already present on `ChatResponse`,
   `GenerateResponse`, and `EmbedResponse` into `{ promptTokens, completionTokens, totalTokens,
-  totalDurationMs, loadDurationMs, promptEvalDurationMs, evalDurationMs, tokensPerSecond }`. Fields the
+totalDurationMs, loadDurationMs, promptEvalDurationMs, evalDurationMs, tokensPerSecond }`. Fields the
   source response doesn't report are `undefined`, never estimated. `ChatStreamResult` and
   `GenerateStreamResult` both carry a populated `usage` field once `done` is `true`.
 
