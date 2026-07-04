@@ -101,6 +101,9 @@ export type { EndpointHealthCheckResult } from './providers/health-check.js';
 
 export { zodToOllamaFormat, parseStructuredOutput } from './schema/zod.js';
 
+export { extractUsage } from './usage.js';
+export type { OllamaUsage, UsageSource } from './usage.js';
+
 // Re-exported upstream request/response types, so consumers rarely need a
 // direct dependency on `ollama` for everyday usage.
 export type {

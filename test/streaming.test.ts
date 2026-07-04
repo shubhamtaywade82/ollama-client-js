@@ -58,6 +58,8 @@ describe('normalizeChatStream', () => {
         message: { role: 'assistant', content: '' },
         done: true,
         total_duration: 2_000_000,
+        prompt_eval_count: 5,
+        eval_count: 2,
       }),
     ];
     const stream = normalizeChatStream(makeAbortableSource(chunks));
@@ -73,6 +75,7 @@ describe('normalizeChatStream', () => {
     const doneEvent = events.find(isType<ChatResponse, ChatStreamResult, 'done'>('done'));
     expect(doneEvent?.data.result.message.content).toBe('Hello');
     expect(doneEvent?.data.result.totalDurationMs).toBe(2);
+    expect(doneEvent?.data.result.usage).toMatchObject({ promptTokens: 5, completionTokens: 2 });
 
     await expect(stream.finalResult).resolves.toMatchObject({ message: { content: 'Hello' } });
   });

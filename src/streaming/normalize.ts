@@ -1,4 +1,5 @@
 import type { ChatResponse, GenerateResponse, ProgressResponse } from 'ollama';
+import { extractUsage } from '../usage.js';
 import { OllamaStream } from './stream.js';
 import type {
   AbortableSource,
@@ -27,6 +28,7 @@ function aggregateChat(accumulated: ChatStreamResult, chunk: ChatResponse): Chat
     model: chunk.model,
     done: chunk.done,
     totalDurationMs: chunk.done ? chunk.total_duration / NANOS_PER_MS : accumulated.totalDurationMs,
+    usage: chunk.done ? extractUsage(chunk) : accumulated.usage,
     raw: chunk,
   };
 }
@@ -75,6 +77,7 @@ function aggregateGenerate(
     model: chunk.model,
     done: chunk.done,
     totalDurationMs: chunk.done ? chunk.total_duration / NANOS_PER_MS : accumulated.totalDurationMs,
+    usage: chunk.done ? extractUsage(chunk) : accumulated.usage,
     raw: chunk,
   };
 }

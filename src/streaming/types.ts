@@ -1,5 +1,6 @@
 import type { ChatResponse, GenerateResponse, ProgressResponse, ToolCall } from 'ollama';
 import type { OllamaClientError } from '../errors.js';
+import type { OllamaUsage } from '../usage.js';
 
 /** The normalized event vocabulary emitted by every stream in this library, regardless of the underlying endpoint. */
 export type OllamaStreamEventType =
@@ -49,6 +50,8 @@ export interface ChatStreamResult {
   readonly model: string;
   readonly done: boolean;
   readonly totalDurationMs?: number;
+  /** Token/duration accounting, populated once the stream reports `done`. */
+  readonly usage?: OllamaUsage;
   readonly raw?: ChatResponse;
 }
 
@@ -58,6 +61,8 @@ export interface GenerateStreamResult {
   readonly model: string;
   readonly done: boolean;
   readonly totalDurationMs?: number;
+  /** Token/duration accounting, populated once the stream reports `done`. */
+  readonly usage?: OllamaUsage;
   readonly raw?: GenerateResponse;
 }
 

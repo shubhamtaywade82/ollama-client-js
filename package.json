@@ -1,6 +1,6 @@
 {
   "name": "ollama-client-js",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A production-grade TypeScript SDK for Ollama, built on top of ollama-js with retries, timeouts, middleware, structured errors, normalized streaming, capability discovery, multi-key failover, and Zod-powered structured outputs.",
   "keywords": [
     "ollama",

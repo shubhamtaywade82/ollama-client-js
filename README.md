@@ -247,6 +247,25 @@ and `supportsStructuredOutputRequest` are always `true`: they describe a protoco
 `/api/chat`/`/api/generate` endpoints (any Ollama server accepts `stream`/`format`), not a per-model
 guarantee that the model will follow those instructions well.
 
+### Usage / token accounting
+
+Ollama already returns token counts and durations (in nanoseconds) on every response; `extractUsage()`
+reshapes that into a uniform, millisecond-scale shape - handy for metering, cost tracking, or logging in
+a larger application (e.g. an agent runtime) built on top of this client:
+
+```ts
+import { extractUsage } from 'ollama-client-js';
+
+const response = await client.chat({ model: 'llama3.2', messages: [...] });
+const usage = extractUsage(response);
+// { promptTokens, completionTokens, totalTokens, totalDurationMs, loadDurationMs,
+//   promptEvalDurationMs, evalDurationMs, tokensPerSecond }
+```
+
+It works on `ChatResponse`, `GenerateResponse`, and `EmbedResponse` alike (fields that don't apply, like
+`completionTokens` for an embedding call, are simply `undefined` rather than guessed). Streaming results
+carry the same data too: `(await stream.finalResult).usage`.
+
 ### Raw HTTP fallback
 
 For endpoints `ollama-js` doesn't wrap (e.g. the blob upload API used when creating models from local

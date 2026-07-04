@@ -94,6 +94,15 @@ available as `await stream.finalResult`.
 - `client.capabilities(model: string): Promise<ModelCapabilities>` - probes `/api/show`.
 - `client.runtimeMode(): 'local' | 'cloud' | 'unknown'` - hostname-based heuristic for the active endpoint.
 
+## Usage / token accounting
+
+- `extractUsage(source: UsageSource): OllamaUsage` - top-level exported function (not a method on
+  `client`). Reshapes the token counts and nanosecond durations already present on `ChatResponse`,
+  `GenerateResponse`, and `EmbedResponse` into `{ promptTokens, completionTokens, totalTokens,
+  totalDurationMs, loadDurationMs, promptEvalDurationMs, evalDurationMs, tokensPerSecond }`. Fields the
+  source response doesn't report are `undefined`, never estimated. `ChatStreamResult` and
+  `GenerateStreamResult` both carry a populated `usage` field once `done` is `true`.
+
 ## Health and failover
 
 - `client.endpointStatus(): EndpointHealth[]` - passive, failure-count-based health for every configured
