@@ -1,0 +1,88 @@
+{
+  "name": "ollama-client-js",
+  "version": "0.1.0",
+  "description": "A production-grade TypeScript SDK for Ollama, built on top of ollama-js with retries, timeouts, middleware, structured errors, normalized streaming, capability discovery, multi-key failover, and Zod-powered structured outputs.",
+  "keywords": [
+    "ollama",
+    "llm",
+    "sdk",
+    "typescript",
+    "ai",
+    "chat",
+    "streaming"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.17.0"
+  },
+  "packageManager": "npm@10.9.7",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "verify": "npm run typecheck && npm run lint && npm run test && npm run build",
+    "changeset": "changeset",
+    "release": "npm run build && changeset publish",
+    "prepublishOnly": "npm run verify"
+  },
+  "dependencies": {
+    "ollama": "^0.6.3",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.31.0",
+    "@eslint/js": "^9.39.4",
+    "@types/node": "^22.20.0",
+    "@vitest/coverage-v8": "^2.1.9",
+    "eslint": "^9.39.4",
+    "eslint-config-prettier": "^9.1.2",
+    "prettier": "^3.9.4",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.62.1",
+    "vitest": "^2.1.9"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shubhamtaywade82/ollama-client-js.git"
+  },
+  "homepage": "https://github.com/shubhamtaywade82/ollama-client-js#readme",
+  "bugs": {
+    "url": "https://github.com/shubhamtaywade82/ollama-client-js/issues"
+  },
+  "author": "shubhamtaywade82"
+}
