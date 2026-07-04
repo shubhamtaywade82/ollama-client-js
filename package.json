@@ -45,6 +45,7 @@
     "dev": "tsup --watch",
     "prepare": "tsup",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "example": "tsx",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
@@ -74,6 +75,7 @@
     "prettier": "^3.9.4",
     "ts-node": "^10.9.2",
     "tsup": "^8.5.1",
+    "tsx": "^4.23.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.62.1",
     "vitest": "^4.1.9"
