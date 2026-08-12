@@ -20,6 +20,10 @@ import type {
   ShowResponse,
   StatusResponse,
   VersionResponse,
+  WebFetchRequest,
+  WebFetchResponse,
+  WebSearchRequest,
+  WebSearchResponse,
 } from 'ollama';
 import { mapError } from '../errors.js';
 import type { OllamaErrorRequestContext } from '../errors.js';
@@ -217,6 +221,22 @@ export class OllamaAdapter {
       return await this.upstream.version();
     } catch (error) {
       throw mapError(error, { request: this.context('/api/version', { method: 'GET' }) });
+    }
+  }
+
+  async webSearch(request: WebSearchRequest): Promise<WebSearchResponse> {
+    try {
+      return await this.upstream.webSearch(request);
+    } catch (error) {
+      throw mapError(error, { request: this.context('/api/web-search', { method: 'POST' }) });
+    }
+  }
+
+  async webFetch(request: WebFetchRequest): Promise<WebFetchResponse> {
+    try {
+      return await this.upstream.webFetch(request);
+    } catch (error) {
+      throw mapError(error, { request: this.context('/api/web-fetch', { method: 'POST' }) });
     }
   }
 
