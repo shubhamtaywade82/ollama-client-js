@@ -6,8 +6,10 @@ transport/protocol layer and adds the things a real application needs around it:
 middleware, structured errors, normalized streaming, capability discovery, multi-endpoint failover, and
 Zod-powered structured outputs.
 
-It is a client SDK, not an agent framework: no prompt orchestration, memory, RAG, or workflow engine
-live here.
+The core `OllamaClient` stays exactly what it sounds like: a thin, faithful wrapper with no prompt
+orchestration, memory, or RAG baked in. Tool calling, an opt-in agentic loop, an MCP tool adapter, and
+a Claude-style Skills loader are available as separate, independently-importable modules built _on
+top of_ the client - pull in only the layers you need.
 
 ## Why not just use `ollama-js` directly?
 
@@ -103,6 +105,153 @@ const review = await client.chatWithSchema(
 `chatWithSchema` converts the Zod schema to JSON Schema, sends it as the `format` field so Ollama
 constrains generation to match it, then validates the model's response against the same schema. On a
 mismatch it throws `OllamaValidationError` (never a raw `SyntaxError`/`ZodError`).
+
+### Reasoning / thinking
+
+`think` is a first-class field on `chat`/`generate` requests, passed straight through to Ollama - no
+separate API:
+
+```ts
+const response = await client.chat({
+  model: 'deepseek-r1',
+  messages: [{ role: 'user', content: 'Solve: 17 * 24' }],
+  think: true, // or 'high' | 'medium' | 'low' on models that support graded effort
+});
+console.log(response.message.thinking); // the model's reasoning trace, when it emits one
+console.log(response.message.content); // the final answer
+```
+
+Streaming surfaces reasoning deltas as their own normalized event: `stream.on('thinking', (event) =>
+process.stdout.write(event.data.delta))`, alongside `'token'` for the final-answer deltas.
+
+### Tool calling
+
+```ts
+import { defineTool, ToolRegistry } from 'ollama-client-js';
+import { z } from 'zod';
+
+const getWeather = defineTool({
+  name: 'get_weather',
+  description: 'Gets the current weather for a city.',
+  parameters: z.object({ city: z.string() }),
+  handler: async ({ city }) => ({ city, tempC: 21, condition: 'sunny' }),
+});
+
+const tools = new ToolRegistry([getWeather]);
+
+const response = await client.chat({
+  model: 'llama3.2',
+  messages: [{ role: 'user', content: 'What is the weather in Paris?' }],
+  tools: tools.toOllamaTools(),
+});
+
+if (response.message.tool_calls) {
+  const results = await tools.executeToolCalls(response.message.tool_calls);
+  // append `results.map(r => r.message)` (role: 'tool') and call `client.chat` again
+}
+```
+
+`defineTool` ties a Zod parameter schema to a handler: the schema both validates a model's call
+arguments before the handler runs and is converted to the JSON Schema Ollama expects in
+`tools[].function.parameters`. `ToolRegistry.executeToolCalls` runs a model's `tool_calls`
+sequentially against registered handlers and returns `role: 'tool'` result messages ready to append
+to the conversation. By default (`onError: 'result'`), an unregistered tool name, a schema mismatch,
+or a handler throwing all become a structured error fed back to the model as a tool message rather
+than crashing your code; pass `onError: 'throw'` for fail-fast behavior instead.
+
+**Note:** Ollama's `ToolCall` carries no call ID (unlike OpenAI/Anthropic tool-call blocks), so a
+result can only be correlated to its request by order - if a model requests the same tool twice in
+one turn, matching results to calls is positional, not ID-based.
+
+### Agent loop
+
+For multi-turn tool use (call the model, run its tool calls, feed results back, repeat), `Agent`
+composes over `OllamaClient` - it's an opt-in module, not baked into `chat()`:
+
+```ts
+import { Agent, ToolRegistry } from 'ollama-client-js';
+
+const agent = new Agent(client, {
+  tools: new ToolRegistry([getWeather]),
+  maxIterations: 10, // guards against infinite tool-call loops; default 10
+  hooks: {
+    onToolCall: ({ toolCall }) => console.log('calling', toolCall.function.name),
+    onToolResult: ({ result }) => console.log('result', result.ok, result.result),
+  },
+});
+
+const result = await agent.run({
+  model: 'llama3.2',
+  messages: [{ role: 'user', content: 'What is the weather in Paris?' }],
+});
+console.log(result.finalMessage.content);
+```
+
+`agent.runStream(...)` is the same loop driven by `chatStream` instead, so `onThinking`/`onToken`
+hooks fire with live deltas as each turn streams in; both methods return the same `AgentResult`
+shape (`messages`, `finalMessage`, `turns`, `iterations`). A run that never converges to a
+tool-call-free message within `maxIterations` throws `OllamaAgentMaxIterationsError`.
+
+### MCP tools
+
+Any object shaped like an MCP SDK `Client` (`listTools()`/`callTool()`) can be turned into tool
+definitions - no dependency on `@modelcontextprotocol/sdk` required:
+
+```ts
+import { registerMcpTools, ToolRegistry } from 'ollama-client-js';
+
+const tools = new ToolRegistry();
+await registerMcpTools(tools, mcpClient, { namePrefix: 'mcp_' }); // namePrefix avoids name collisions
+
+const agent = new Agent(client, { tools });
+```
+
+MCP-sourced tools use the server's raw JSON Schema `inputSchema` directly (not a Zod schema), so
+unlike `defineTool`-based tools they get no client-side argument validation before the call is made.
+A result's text content blocks are joined into the tool message; non-text blocks (images, embedded
+resources) become a `[unsupported content type: ...]` placeholder rather than being silently
+dropped. A result with `isError: true` is thrown as `OllamaMcpError`.
+
+### Skills
+
+A lightweight, Claude-style convention for packaging reusable instructions: a directory of
+`<skill-name>/SKILL.md` files, each with YAML frontmatter (`name`, `description`, optional
+`allowed-tools`) and a markdown body.
+
+```
+skills/
+  code-reviewer/
+    SKILL.md
+```
+
+```md
+---
+name: code-reviewer
+description: Reviews a diff for correctness and style issues.
+allowed-tools: read_file, search_code
+---
+
+Review the given diff for correctness bugs first, then style. Be concise.
+```
+
+`SkillRegistry` is Node-only (it reads files off disk), so it's exported from the
+`ollama-client-js/skills` subpath rather than the package's main entry - importing from
+`ollama-client-js` itself never pulls in `node:fs`, keeping the main bundle usable from
+browsers/edge runtimes:
+
+```ts
+import { SkillRegistry } from 'ollama-client-js/skills';
+import { applySkill } from 'ollama-client-js'; // pure helper, available from the main entry
+
+const skills = new SkillRegistry({ directory: './skills' });
+await skills.list(); // [{ name, description, path }, ...] - bodies aren't read yet
+const skill = await skills.load('code-reviewer'); // full body + allowedTools, read on demand
+
+const { messages, tools } = applySkill(skill, {
+  messages: [{ role: 'user', content: 'Review this diff: ...' }],
+  tools: myToolRegistry, // narrowed to `allowed-tools` when the skill declares them
+});
+```
 
 ## Configuration
 
@@ -324,6 +473,14 @@ client.healthCheck();
 client.endpointStatus();
 client.raw; // RawHttpClient
 client.abort(); // aborts every in-flight streamed request
+
+// Opt-in layers, built on top of OllamaClient - see the sections above
+defineTool({ name, description, parameters, handler }); // Zod-backed tool definition
+new ToolRegistry(tools?, options?); // .toOllamaTools() / .executeToolCalls() / .filter()
+new Agent(client, { tools, maxIterations?, hooks? }); // .run() / .runStream()
+loadMcpTools(mcpClient, options?); // registerMcpTools(registry, mcpClient, options?)
+applySkill(skill, { messages, tools? }); // parseFrontmatter(source)
+// SkillRegistry lives in the separate `ollama-client-js/skills` subpath (Node-only)
 ```
 
 Every method accepts the upstream `ollama-js` request shape plus optional `signal`/`timeoutMs`. See
@@ -331,7 +488,8 @@ Every method accepts the upstream `ollama-js` request shape plus optional `signa
 you're migrating from `ollama-js` directly.
 
 More runnable examples live in [`examples/`](./examples): basic chat, streaming, structured output,
-custom middleware, retries/timeouts, and raw fallback transport.
+custom middleware, retries/timeouts, raw fallback transport, tool calling, the agent loop, MCP
+tools, and skills.
 
 ## Architecture
 
@@ -348,10 +506,22 @@ src/
   capabilities/                 Capability discovery
   providers/                     Multi-endpoint registry, health checks, failover
   schema/                          Zod <-> JSON Schema, structured-output parsing/validation
+  tools/                            Typed tool definitions (defineTool) + ToolRegistry (execution)
+  agent/                             Opt-in multi-turn tool-calling loop (Agent), composes over OllamaClient
+  mcp/                                Duck-typed MCP tool adapter (no @modelcontextprotocol/sdk dependency)
+  skills/                             SKILL.md convention; SkillRegistry is Node-only, its own subpath entry
 ```
 
 Everything that talks to the upstream `ollama` package goes through `adapter/ollama-adapter.ts` - nothing
-else imports from `ollama` directly, so upgrading or replacing that dependency only ever touches one file.
+else imports from `ollama` directly (aside from type-only imports of its request/response shapes, used
+freely throughout), so upgrading or replacing that dependency only ever touches one file.
+
+`tools/`, `agent/`, and `mcp/` are pure TypeScript with no Node-specific APIs, so they build into the
+package's single `platform: 'neutral'` main entry alongside everything else. `skills/` is split: its
+pure pieces (`types.ts`, `frontmatter.ts`, `compose.ts`) are re-exported from the main entry too, but
+`skill-registry.ts` reads files via `node:fs/promises` and is only exported from the separate
+`ollama-client-js/skills` subpath (its own `tsup` build entry), so importing the main package never
+pulls in Node filesystem APIs.
 
 ## Development
 
