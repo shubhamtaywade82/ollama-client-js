@@ -18,7 +18,14 @@ export type OllamaErrorCode =
   | 'server_error'
   | 'unsupported_feature'
   | 'client_error'
-  | 'aborted';
+  | 'aborted'
+  | 'unknown_tool'
+  | 'tool_execution_error'
+  | 'tool_validation_error'
+  | 'agent_max_iterations_exceeded'
+  | 'mcp_error'
+  | 'skill_not_found'
+  | 'skill_invalid';
 
 /** Minimal, non-sensitive information about the request that failed. */
 export interface OllamaErrorRequestContext {
@@ -155,6 +162,107 @@ export class OllamaAbortError extends OllamaClientError {
 export class OllamaGenericClientError extends OllamaClientError {
   constructor(message: string, options: Omit<OllamaClientErrorOptions, 'code'> = {}) {
     super(message, { ...options, code: 'client_error', retryable: options.retryable ?? false });
+  }
+}
+
+/** Raised when a model requests a tool name that isn't registered in the active `ToolRegistry`. */
+export class OllamaUnknownToolError extends OllamaClientError {
+  readonly toolName: string;
+
+  constructor(
+    message: string,
+    options: Omit<OllamaClientErrorOptions, 'code'> & { toolName: string },
+  ) {
+    super(message, { ...options, code: 'unknown_tool', retryable: false });
+    this.toolName = options.toolName;
+  }
+}
+
+/** Raised when a registered tool's handler throws while executing a model's tool call. */
+export class OllamaToolExecutionError extends OllamaClientError {
+  readonly toolName: string;
+
+  constructor(
+    message: string,
+    options: Omit<OllamaClientErrorOptions, 'code'> & { toolName: string },
+  ) {
+    super(message, { ...options, code: 'tool_execution_error', retryable: false });
+    this.toolName = options.toolName;
+  }
+}
+
+/** Raised when a tool call's arguments don't match the tool's declared (Zod) parameter schema. */
+export class OllamaToolValidationError extends OllamaClientError {
+  readonly toolName: string;
+  /** The underlying validation issues (e.g. a ZodError's `.issues`), when available. */
+  readonly issues?: unknown;
+
+  constructor(
+    message: string,
+    options: Omit<OllamaClientErrorOptions, 'code'> & { toolName: string; issues?: unknown },
+  ) {
+    super(message, { ...options, code: 'tool_validation_error', retryable: false });
+    this.toolName = options.toolName;
+    this.issues = options.issues;
+  }
+}
+
+/** Raised by {@link Agent} when a run doesn't converge to a tool-call-free message within `maxIterations`. */
+export class OllamaAgentMaxIterationsError extends OllamaClientError {
+  readonly maxIterations: number;
+
+  constructor(
+    message: string,
+    options: Omit<OllamaClientErrorOptions, 'code'> & { maxIterations: number },
+  ) {
+    super(message, { ...options, code: 'agent_max_iterations_exceeded', retryable: false });
+    this.maxIterations = options.maxIterations;
+  }
+}
+
+/** Raised when an MCP-shaped client's `listTools`/`callTool` call fails or reports `isError: true`. */
+export class OllamaMcpError extends OllamaClientError {
+  readonly mcpMethod: 'listTools' | 'callTool';
+  readonly toolName?: string;
+
+  constructor(
+    message: string,
+    options: Omit<OllamaClientErrorOptions, 'code'> & {
+      mcpMethod: 'listTools' | 'callTool';
+      toolName?: string;
+    },
+  ) {
+    super(message, { ...options, code: 'mcp_error', retryable: options.retryable ?? false });
+    this.mcpMethod = options.mcpMethod;
+    this.toolName = options.toolName;
+  }
+}
+
+/** Raised when {@link SkillRegistry.load} is asked for a skill name that doesn't exist. */
+export class OllamaSkillNotFoundError extends OllamaClientError {
+  readonly skillName: string;
+
+  constructor(
+    message: string,
+    options: Omit<OllamaClientErrorOptions, 'code'> & { skillName: string },
+  ) {
+    super(message, { ...options, code: 'skill_not_found', retryable: false });
+    this.skillName = options.skillName;
+  }
+}
+
+/** Raised when a `SKILL.md` file is missing required frontmatter (`name`/`description`) or is otherwise malformed. */
+export class OllamaSkillInvalidError extends OllamaClientError {
+  readonly skillName: string;
+  readonly path?: string;
+
+  constructor(
+    message: string,
+    options: Omit<OllamaClientErrorOptions, 'code'> & { skillName: string; path?: string },
+  ) {
+    super(message, { ...options, code: 'skill_invalid', retryable: false });
+    this.skillName = options.skillName;
+    this.path = options.path;
   }
 }
 

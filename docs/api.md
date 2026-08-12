@@ -103,6 +103,70 @@ totalDurationMs, loadDurationMs, promptEvalDurationMs, evalDurationMs, tokensPer
   source response doesn't report are `undefined`, never estimated. `ChatStreamResult` and
   `GenerateStreamResult` both carry a populated `usage` field once `done` is `true`.
 
+## Tool calling
+
+- `defineTool({ name, description, parameters, handler }): ToolDefinition` - `parameters` is a Zod
+  schema; `handler(args, ctx)` receives parsed, validated arguments. `ctx: { toolCall, signal? }`.
+- `toolToOllamaFormat(tool: ToolDefinition): Tool` - converts one definition to the wire `Tool`
+  shape (Zod schemas go through `zodToOllamaFormat`; raw JSON Schema objects, as used by MCP-sourced
+  tools, pass through unchanged).
+- `new ToolRegistry(tools?, options?)` - `options.onError`: `'result'` (default) or `'throw'`.
+  - `.register(tool)` / `.unregister(name)` / `.has(name)` / `.list()`
+  - `.toOllamaTools(): Tool[]` - for a `chat` request's `tools` field.
+  - `.filter(names): ToolRegistry` - a new registry scoped to a subset of names (used by Skills'
+    `allowed-tools`).
+  - `.executeToolCall(toolCall, ctx?): Promise<ToolExecutionResult>` /
+    `.executeToolCalls(toolCalls, ctx?): Promise<ToolExecutionResult[]>` - executes sequentially, in
+    request order (Ollama's `ToolCall` has no call ID, so order is the only correlation mechanism).
+    `ToolExecutionResult`: `{ name, ok, result?, error?, message }`, where `message` is the
+    `role: 'tool'` message to append to the conversation either way.
+
+## Agent loop
+
+`new Agent(client: OllamaClient, config: AgentConfig)` - opt-in, composes over `OllamaClient` by
+calling its public `chat`/`chatStream` methods; not required for basic tool-calling.
+
+- `config`: `{ tools: ToolRegistry, maxIterations?: number /* default 10 */, hooks?: AgentHooks }`.
+- `agent.run(input: AgentRunInput): Promise<AgentResult>` - non-streaming loop.
+- `agent.runStream(input: AgentRunInput): Promise<AgentResult>` - same loop over `chatStream`;
+  `hooks.onThinking`/`hooks.onToken` fire with live deltas per turn.
+- `AgentRunInput`: `{ model, messages, think?, options?, signal? }`.
+- `AgentResult`: `{ messages, finalMessage, turns, iterations }`.
+- `AgentHooks`: `onTurnStart`, `onThinking`, `onToken`, `onAssistantMessage`, `onToolCall`,
+  `onToolResult`, `onTurnEnd` - fired in that order per turn.
+- Throws `OllamaAgentMaxIterationsError` if no tool-call-free message is reached within
+  `maxIterations`.
+
+## MCP tool adapter
+
+Zero extra dependency - duck-typed against `@modelcontextprotocol/sdk`'s `Client` shape.
+
+- `McpClientLike`: `{ listTools(): Promise<{tools}>; callTool({name, arguments}): Promise<{content, isError?}> }`.
+- `loadMcpTools(mcpClient: McpClientLike, options?: { namePrefix? }): Promise<ToolDefinition[]>`.
+- `registerMcpTools(registry: ToolRegistry, mcpClient, options?): Promise<void>`.
+- MCP tools carry their raw `inputSchema` as `parameters` (no client-side Zod validation). A result's
+  text content blocks are joined into the tool message; non-text blocks become a
+  `[unsupported content type: ...]` placeholder. `isError: true`, or a rejected `listTools`/`callTool`
+  call, throws `OllamaMcpError`.
+
+## Skills
+
+`SKILL.md` convention (frontmatter: `name`, `description`, optional `allowed-tools`, + a markdown
+body), modeled on Claude's Agent Skills.
+
+- `parseFrontmatter(source: string): { frontmatter, body }` - pure, hand-rolled parser for the
+  narrow subset needed: flat scalars, plus YAML-style multi-line lists (`key:\n  - a\n  - b`). A
+  scalar is never comma-split (a `description` is free text that may contain commas); a
+  comma-separated `allowed-tools: a, b` string is instead split by `SkillRegistry.load`.
+- `applySkill(skill: Skill, { messages, tools? }): { messages, tools? }` - merges the skill body into
+  a leading system message; narrows `tools` via `ToolRegistry.filter(...)` when `allowed-tools` is set.
+- `SkillRegistry` - **imported from the `ollama-client-js/skills` subpath**, not the main entry,
+  since it's Node-only (`node:fs/promises`):
+  - `new SkillRegistry({ directory })`
+  - `.list(): Promise<SkillSummary[]>` - frontmatter only (name/description), no bodies read.
+  - `.load(name): Promise<Skill>` - full frontmatter + body + `allowedTools`, read on demand. Throws
+    `OllamaSkillNotFoundError` / `OllamaSkillInvalidError`.
+
 ## Health and failover
 
 - `client.endpointStatus(): EndpointHealth[]` - passive, failure-count-based health for every configured
@@ -134,7 +198,14 @@ OllamaClientError (base: .code, .status?, .request?, .response?, .retryable, .ca
 ├─ OllamaServerError                (code: 'server_error',        retryable: true; HTTP 5xx)
 ├─ OllamaUnsupportedFeatureError      (code: 'unsupported_feature', retryable: false)
 ├─ OllamaAbortError                     (code: 'aborted',             retryable: false)
-└─ OllamaGenericClientError               (code: 'client_error',        catch-all for other 4xx)
+├─ OllamaGenericClientError               (code: 'client_error',        catch-all for other 4xx)
+├─ OllamaUnknownToolError                  (code: 'unknown_tool',         retryable: false; .toolName)
+├─ OllamaToolExecutionError                 (code: 'tool_execution_error', retryable: false; .toolName)
+├─ OllamaToolValidationError                 (code: 'tool_validation_error', retryable: false; .toolName, .issues)
+├─ OllamaAgentMaxIterationsError               (code: 'agent_max_iterations_exceeded', retryable: false; .maxIterations)
+├─ OllamaMcpError                               (code: 'mcp_error', retryable: false by default; .mcpMethod, .toolName?)
+├─ OllamaSkillNotFoundError                      (code: 'skill_not_found', retryable: false; .skillName)
+└─ OllamaSkillInvalidError                        (code: 'skill_invalid', retryable: false; .skillName, .path?)
 ```
 
 `mapError(error, context?)` is exported for advanced use (e.g. custom transports that want the same error

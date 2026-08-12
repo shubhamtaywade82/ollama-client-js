@@ -30,6 +30,13 @@ export {
   OllamaUnsupportedFeatureError,
   OllamaAbortError,
   OllamaGenericClientError,
+  OllamaUnknownToolError,
+  OllamaToolExecutionError,
+  OllamaToolValidationError,
+  OllamaAgentMaxIterationsError,
+  OllamaMcpError,
+  OllamaSkillNotFoundError,
+  OllamaSkillInvalidError,
   mapError,
 } from './errors.js';
 export type {
@@ -105,6 +112,59 @@ export { zodToOllamaFormat, parseStructuredOutput } from './schema/zod.js';
 
 export { extractUsage } from './usage.js';
 export type { OllamaUsage, UsageSource } from './usage.js';
+
+// ---------------------------------------------------------------------
+// Tool calling
+// ---------------------------------------------------------------------
+export { defineTool, toolToOllamaFormat } from './tools/define-tool.js';
+export { ToolRegistry } from './tools/registry.js';
+export type { ToolRegistryOptions } from './tools/registry.js';
+export type {
+  InferToolArgs,
+  ToolDefinition,
+  ToolExecutionContext,
+  ToolExecutionResult,
+  ToolHandler,
+  ToolParameters,
+} from './tools/types.js';
+
+// ---------------------------------------------------------------------
+// Agent loop (opt-in, composes over OllamaClient - not required for basic usage)
+// ---------------------------------------------------------------------
+export { Agent } from './agent/agent.js';
+export type {
+  AgentConfig,
+  AgentHooks,
+  AgentResult,
+  AgentRunInput,
+  AgentTurn,
+} from './agent/types.js';
+
+// ---------------------------------------------------------------------
+// MCP tool adapter (zero extra dependency; duck-typed against
+// @modelcontextprotocol/sdk's Client shape - listTools()/callTool())
+// ---------------------------------------------------------------------
+export { loadMcpTools, registerMcpTools } from './mcp/mcp-tools.js';
+export type { McpToolOptions } from './mcp/mcp-tools.js';
+export type {
+  McpCallToolResult,
+  McpClientLike,
+  McpContentBlock,
+  McpListToolsResult,
+  McpToolDescriptor,
+} from './mcp/types.js';
+
+// ---------------------------------------------------------------------
+// Skills (SKILL.md convention). These are the pure, browser-safe pieces
+// only - `SkillRegistry` needs `node:fs` and is exported from the
+// './skills' subpath instead (`ollama-client-js/skills`), so importing
+// from the package's main entry never pulls in Node filesystem APIs.
+// ---------------------------------------------------------------------
+export { applySkill } from './skills/compose.js';
+export type { ApplySkillInput, ApplySkillResult } from './skills/compose.js';
+export { parseFrontmatter } from './skills/frontmatter.js';
+export type { ParsedFrontmatter } from './skills/frontmatter.js';
+export type { Skill, SkillFrontmatter, SkillSummary } from './skills/types.js';
 
 // Re-exported upstream request/response types, so consumers rarely need a
 // direct dependency on `ollama` for everyday usage.
