@@ -19,6 +19,10 @@ import type {
   ShowResponse,
   StatusResponse,
   VersionResponse,
+  WebFetchRequest,
+  WebFetchResponse,
+  WebSearchRequest,
+  WebSearchResponse,
 } from 'ollama';
 
 import { OllamaAdapter } from './adapter/ollama-adapter.js';
@@ -77,6 +81,8 @@ export type PushRequestInput = WithCancellation<PushRequest>;
 export type CreateRequestInput = WithCancellation<CreateRequest>;
 export type DeleteRequestInput = WithCancellation<DeleteRequest>;
 export type CopyRequestInput = WithCancellation<CopyRequest>;
+export type WebSearchRequestInput = WithCancellation<WebSearchRequest>;
+export type WebFetchRequestInput = WithCancellation<WebFetchRequest>;
 
 interface EndpointResources {
   readonly adapter: OllamaAdapter;
@@ -455,6 +461,28 @@ export class OllamaClient {
 
   async version(): Promise<VersionResponse> {
     return this.runWithFailover((adapter) => adapter.version());
+  }
+
+  // ---------------------------------------------------------------------
+  // Web search and fetch
+  // ---------------------------------------------------------------------
+
+  async webSearch(request: WebSearchRequestInput): Promise<WebSearchResponse> {
+    const { signal, timeoutMs } = request;
+    const upstreamRequest = stripCancellation(request);
+    return this.withCancellation(
+      () => this.runWithFailover((adapter) => adapter.webSearch(upstreamRequest)),
+      { signal, timeoutMs },
+    );
+  }
+
+  async webFetch(request: WebFetchRequestInput): Promise<WebFetchResponse> {
+    const { signal, timeoutMs } = request;
+    const upstreamRequest = stripCancellation(request);
+    return this.withCancellation(
+      () => this.runWithFailover((adapter) => adapter.webFetch(upstreamRequest)),
+      { signal, timeoutMs },
+    );
   }
 
   // ---------------------------------------------------------------------

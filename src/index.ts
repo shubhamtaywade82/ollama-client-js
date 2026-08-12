@@ -10,6 +10,8 @@ export type {
   CreateRequestInput,
   DeleteRequestInput,
   CopyRequestInput,
+  WebSearchRequestInput,
+  WebFetchRequestInput,
   WithCancellation,
 } from './client.js';
 
@@ -132,4 +134,8 @@ export type {
   Tool,
   ToolCall,
   VersionResponse,
+  WebFetchRequest,
+  WebFetchResponse,
+  WebSearchRequest,
+  WebSearchResponse,
 } from 'ollama';
