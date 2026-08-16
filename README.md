@@ -523,6 +523,40 @@ pure pieces (`types.ts`, `frontmatter.ts`, `compose.ts`) are re-exported from th
 `ollama-client-js/skills` subpath (its own `tsup` build entry), so importing the main package never
 pulls in Node filesystem APIs.
 
+## Recommended Small Language Models (2026)
+
+For local, edge, or on-device deployments, smaller models (typically under 10B parameters) now deliver performance competitive with much larger predecessors. Below are top-performing open-weight models organized by size class.
+
+### ~2–4.5B Range (Mobile & Edge Devices)
+Optimized for phones, low-RAM devices, and edge deployment (~1.5–3 GB quantized):
+
+- **Gemma 4 / Gemma 3n / Gemma 4 E2B–E4B** (Google): Best-in-class at this scale with multimodal support (text + images; some audio/video). Excellent efficiency-adjusted quality.
+- **Phi-4 Mini** (Microsoft, ~3.8B): Strong reasoning, math, science, and code capabilities. MIT licensed.
+- **Qwen3 / Qwen3.5 Small Variants** (Alibaba, 0.6B–4B): Exceptional multilingual, reasoning, and coding performance. Apache 2.0 licensed.
+- **Llama 3.2 3B** (Meta): Solid all-rounder for general chat and on-device use.
+
+### ~7–9B Range (Consumer GPUs & Laptops)
+Best balance of capability and accessibility (runs on 8–16 GB VRAM):
+
+- **Qwen3 / Qwen3.5 8B–9B** (Alibaba): Top-tier for reasoning, multilingual tasks, coding, and MMLU-Pro benchmarks.
+- **IBM Granite 4.1 8B**: Outstanding coding performance and enterprise tool-use. Apache 2.0 licensed.
+- **Ministral 3 Series** (Mistral, 3B/8B/14B): Strong value with reasoning variants and multilingual support.
+- **Phi-4** (Microsoft, up to ~14–15B): High capability density, especially for reasoning and math.
+
+### Ultra-Efficient Options (<2B)
+For extremely constrained environments (browser, embedded, microcontrollers):
+
+- **SmolLM / SmolLM2/3 Variants** (Hugging Face, 135M–3B): Designed for minimal resource usage.
+- **Tiny/1B-Class Models**: Qwen and Llama 3.2 1B variants for absolute lowest resource consumption.
+
+### Quick Recommendations
+- **Best overall for local use**: Qwen3/3.5 family (4B–9B) or Gemma 4 edge variants
+- **Coding & enterprise**: Granite 4.1 8B or Qwen
+- **Math & reasoning**: Phi series or Qwen thinking variants / DeepSeek distill
+- **Lowest resources**: Gemma 4 E2B / SmolLM / Qwen sub-2B
+
+> **Note:** Performance varies by quantization (Q4/Q5/Q8), hardware (Apple Silicon, NVIDIA, etc.), and specific tasks. Many of these models match or exceed older 30B+ models on targeted benchmarks while using significantly less memory and compute. Check recent leaderboards (Hugging Face, Artificial Analysis, BenchLM) or local tools (Ollama, LM Studio) for the latest quantized versions and real-world benchmarks.
+
 ## Development
 
 ```bash
